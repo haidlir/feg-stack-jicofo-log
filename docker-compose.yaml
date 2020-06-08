@@ -1,0 +1,92 @@
+version: '3.2'
+
+networks:
+  feg:
+    external: true
+
+volumes:
+  grafana_data:
+  elasticsearch_data:
+
+services:
+
+  fluentd:
+    build: ./fluentd
+    networks:
+      feg:
+        aliases:
+          - fluentd
+    volumes:
+      - type: bind
+        source: ./fluentd/conf
+        target: /fluentd/etc
+        read_only: true
+    ports:
+      - "24224:24224"
+      - "24224:24224/udp" 
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:7.6.2
+    networks:
+      feg:
+        aliases:
+          - elasticsearch
+    ports:
+      - "9200:9200"
+    volumes:
+      - type: bind
+        source: ./elasticsearch/conf/elasticsearch.yml
+        target: /usr/share/elasticsearch/config/elasticsearch.yml
+        read_only: true
+      - type: volume
+        source: elasticsearch_data
+        target: /usr/share/elasticsearch/data
+    environment:
+      ES_JAVA_OPTS: "-Xmx256m -Xms256m"
+      discovery.type: single-node
+      ELASTIC_PASSWORD: changeme
+
+  kibana:
+    image: docker.elastic.co/kibana/kibana:7.6.2
+    ports:
+      - "5601:5601"
+    volumes:
+      - type: bind
+        source: ./kibana/conf/kibana.yml
+        target: /usr/share/kibana/config/kibana.yml
+        read_only: true
+    ports:
+      - "5601:5601"
+    networks:
+      feg:
+        aliases:
+          - kibana
+    depends_on:
+      - elasticsearch
+
+  grafana:
+    image: grafana/grafana:7.0.3
+    networks:
+      feg:
+        aliases:
+          - grafana
+    ports:
+      - 3000:3000
+    volumes:
+      # - grafana_data:/var/lib/grafana
+      - type: volume
+        source: grafana_data
+        target: /var/lib/grafana
+    environment:
+      - "GF_SECURITY_ADMIN_PASSWORD=changeme"
+    privileged: false
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "5"
